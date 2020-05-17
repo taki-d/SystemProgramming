@@ -1,0 +1,247 @@
+----------------------------------------------------------------------
+学籍番号: 202013586
+名前: 木下 嵩裕
+課題番号：2
+練習問題番号：205 ,207
+題名：strcpy,strdupの再実装とstrlenの高速化
+
+環境:
+ArchLinux 2020.05.17 10:00(UTC+0800) 最新
+
+$ gcc --version
+gcc (GCC) 10.1.0
+Copyright (C) 2020 Free Software Foundation, Inc.
+This is free software; see the source for copying conditions.  There is NO
+warranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+
+$ gdb --version
+GNU gdb (GDB) 9.1
+Copyright (C) 2020 Free Software Foundation, Inc.
+License GPLv3+: GNU GPL version 3 or later <http://gnu.org/licenses/gpl.html>
+This is free software: you are free to change and redistribute it.
+There is NO WARRANTY, to the extent permitted by law.
+
+課題205(26行目〜), 課題207(150行目〜)
+
+課題205
+
+my_strcpyの作成と動作の確認用に以下の strcpy.cを作成した．
+
+strcpy.c
+----------------------------------------------------------------------
+#include <stdio.h>
+#include <string.h>
+
+
+char *my_strcpy(char *s1, const char *s2){
+    int i = 0;
+    while(s2[i] != '\0'){
+        s1[i] = s2[i];
+        i++;
+    }
+    
+    return s1;
+};
+
+int main(void){
+    //
+    char str1[100] = "University of Tsukuba";
+    char str2[100] = "College of Information Science";
+    char str3[100] = "Tsukuba City";
+
+    char my_str1[100] = "University of Tsukuba";
+    char my_str2[100] = "College of Information Science";
+    char my_str3[100] = "Tsukuba City";
+
+    printf("strcpy   : %s\n", str1);
+    printf("mystrcpy : %s\n", str1);
+
+    strcpy(str1, str2);
+    my_strcpy(my_str1, my_str2);
+
+    printf("strcpy   : %s\n", str1);
+    printf("mystrcpy : %s\n", str1);
+
+    strcpy(str1, str3);
+    my_strcpy(my_str1, my_str3);
+
+    printf("strcpy   : %s\n", str1);
+    printf("mystrcpy : %s\n", str1);
+
+    return 0;
+}
+----------------------------------------------------------------------
+
+以下のように，gccでstrpy.cをコンパイルして実行する．
+
+$ gcc strcpy.c -o strcpy
+$ ./strcpy
+strcpy   : University of Tsukuba
+mystrcpy : University of Tsukuba
+strcpy   : College of Information Science
+mystrcpy : College of Information Science
+strcpy   : Tsukuba City
+mystrcpy : Tsukuba City
+
+strcpyを使った場合とmy_strcpyを使用したとき，出力は同じであり，
+strcpyは正しく実装できていると考えられる．
+
+
+my_strdupの作成と動作の確認用に以下のstrdup.cを作成した．
+
+strdup.c
+----------------------------------------------------------------------
+#include <stdio.h>
+#include <string.h>
+
+
+char *my_strdup(const char *s){
+    char *rt_s = malloc(sizeof(s));
+
+    int i = 0;
+    while(s[i] != '\0'){
+        rt_s[i] = s[i];
+        i++;
+    }
+
+    return rt_s;
+};
+
+int main(void){
+    char str1[100] = "University of Tsukuba";
+    char str2[100] = "College of Information Science";
+
+    char *s1, *s2, *my_s1, *my_s2;
+
+    s1 = strdup(str1);
+    my_s1 = my_strdup(str1);
+
+    printf("strdup   : %s\n", s1);
+    printf("mystrdup : %s\n", my_s1);
+
+    s2 = strdup(str2);
+    my_s2 = my_strdup(str2);
+
+    printf("strdup   : %s\n", s2);
+    printf("mystrdup : %s\n", my_s2);
+
+    free(s1);
+    free(s2);
+    free(my_s1);
+    free(my_s2);
+
+    return 0;
+}
+----------------------------------------------------------------------
+
+以下のように，gccでstrdup.cをコンパイルして実行する．
+
+$ gcc strdup.c -o strdup
+$ ./strdup 
+strdup   : University of Tsukuba
+mystrdup : University of Tsukuba
+strdup   : College of Information Science
+mystrdup : College of Information Science
+
+
+strdupを使った場合とmy_strdupを使用したときと，出力は同じであり，
+strdupは正しく実装できていると考えられる．
+
+課題207
+
+glibcのstrlen，my_strlen1,my_strlen3の時間計測を行うプログラム
+strlen.cを作成した．以下に示す．
+
+strlen.c
+----------------------------------------------------------------------
+#include <stdio.h>
+#include <string.h>
+#include <time.h>
+
+void generate_rand_text(int length, char *result) {
+    char char_set[] = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
+
+    for (int i = 0; i < length; i++) {
+        int random = rand() % ((sizeof(char_set) / sizeof (char)) - 1);
+        result[i] = char_set[random];
+    }
+    result[length] = 0;
+}
+
+size_t my_strlen1(const char *s){
+    size_t len = 0;
+    while(s[len] != '\0'){
+        ++len;
+    }
+
+    return len;
+};
+
+size_t my_strlen2(const char *s){
+    size_t len = 0;
+
+    while(1) {
+        unsigned x = *(unsigned*)s;
+        if((x & 0xFF) == 0) return len;
+        if((x & 0xFF00) == 0) return len + 1;
+        if((x & 0xFF0000) == 0) return len + 2;
+        if((x & 0xFF000000) == 0) return len + 3;
+
+        s+=4, len+=4;
+    }
+};
+
+const int text_size = 10000000;
+const int loop = 300;
+
+int main(void){
+    char *chars = malloc((text_size + 1)* sizeof (char));
+    generate_rand_text(text_size, chars);
+
+    time_t start,end;
+    long long int len = 0;
+
+    start = clock();
+    len = 0;
+    for(int i = 0; i < loop; i++) len += strlen(chars);
+    printf("glibc strlen:%d\n", len/loop);
+    end = clock();
+    printf("%.5f\n", (double)(end - start)/CLOCKS_PER_SEC);
+
+    start = clock();
+    len = 0;
+    for(int i = 0; i < loop; i++) len += my_strlen1(chars);
+    printf("my_strlen1:%d\n", len/loop);
+    end = clock();
+    printf("%.5f\n", (double)(end - start)/CLOCKS_PER_SEC);
+
+    start = clock();
+    len = 0;
+    for(int i = 0; i < loop; i++) len += my_strlen2(chars);
+    printf("my_strlen2:%d\n", len/loop);
+    end = clock();
+    printf("%.5f\n", (double)(end - start)/CLOCKS_PER_SEC);
+
+    free(chars);
+
+    return 0;
+}
+----------------------------------------------------------------------
+
+以下のように，明示的に最適化を切ってコンパイルして実行する．
+$ gcc -O0 stlen.c -o strlen
+$ ./strlen
+glibc strlen:10000000
+0.20070
+my_strlen1:10000000
+7.59983
+my_strlen2:10000000
+2.13164
+
+glibcのstrlen，my_strlen1，my_strlen2ともに同様のlengthを出力しており
+正しく実装できていると考えられる．
+my_strlen2は，メモリアクセスに関して最適化を行った．多くの場合メモリのアクセスは大きな時間がかかる．
+1byteずつ取得せずに4byteずつ取得することで4倍程度の高速化を見込んだ．実際，3.56倍高速化ができていた．
+4byteずつメモリアクセスすると終端部で配列範囲外へのアクセスの可能性があるが，charのような小さなbyte数の
+配列を作成した場合mallocによってアライメントされ少し大きなサイズのメモリ領域が確保されるので
+4byteずつアクセスしても問題はない．
