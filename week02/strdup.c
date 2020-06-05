@@ -13,6 +13,7 @@ char *my_strcpy(char *s1, const char *s2){
 
 char *my_strdup(const char *s){
     char *rt_s = malloc(sizeof(s));
+    printf("%d\n",sizeof(*s));
 
     int i = 0;
     while(s[i] != '\0'){

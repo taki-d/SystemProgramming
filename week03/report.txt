@@ -1,0 +1,350 @@
+----------------------------------------------------------------------
+学籍番号: 202013586
+名前: 木下 嵩裕
+課題番号：3
+練習問題番号：301 ,303
+題名：様々なファイルの読み書きの方法
+
+環境:
+ArchLinux 2020.05.05 10:00(UTC+0800) 最新
+
+$ gcc --version
+gcc (GCC) 10.1.0
+Copyright (C) 2020 Free Software Foundation, Inc.
+This is free software; see the source for copying conditions.  There is NO
+warranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+
+$ gdb --version
+GNU gdb (GDB) 9.1
+Copyright (C) 2020 Free Software Foundation, Inc.
+License GPLv3+: GNU GPL version 3 or later <http://gnu.org/licenses/gpl.html>
+This is free software: you are free to change and redistribute it.
+There is NO WARRANTY, to the extent permitted by law.
+
+課題301(26行目〜),課題303(271行目〜)
+
+課題301
+
+次のコマンドで課題用に200文字で改行し，500000行のランダム文字列を生成した．
+$ cat /dev/urandom | tr -dc 'a-zA-Z0-9' | fold -w 200 | head -n 500000  > file
+
+fgetcとfputc,fgetsとfputs,freadとfwrite,readとwriteを使って第1引数のファイル名のファイル
+を第2引数のファイルへコピーするプログラム，fgetc.c,fgets.c,fread.c,read.cを作成した．
+fread.cとread.cに関しては第三引数でバッファのbyte数を入力するようにした．
+以下にそのプログラムを示す．
+
+
+fgetc.c
+----------------------------------------------------------------------
+#include <stdio.h>
+#include <time.h>
+
+
+int main(int argc, char *argv[])
+{
+    int c;
+    FILE *fps, *fpd;
+    clock_t start,end;
+
+    start = clock();
+
+    fps = fopen(argv[1], "r");
+    if (fps == NULL) {
+        perror(argv[1]);
+        exit(1);
+    }
+
+    fpd = fopen(argv[2], "w");
+    if (fpd == NULL) {
+        perror(argv[2]);
+        fclose(fps);
+        exit(1);
+    }
+
+    while ((c = fgetc(fps)) != EOF) {
+        fputc(c, fpd);
+    }
+
+    fclose(fpd);
+    fclose(fps);
+
+    end = clock();
+
+    printf("%.5f\n", (double)(end-start)/CLOCKS_PER_SEC);
+
+    return 0;
+}
+
+----------------------------------------------------------------------
+
+
+fgets.c
+----------------------------------------------------------------------
+#include <stdio.h>
+#include <time.h>
+
+
+int main(int argc, char *argv[])
+{
+    int c;
+    FILE *fps, *fpd;
+    clock_t start,end;
+    char buf[256];
+
+    start = clock();
+
+    fps = fopen(argv[1], "r");
+    if (fps == NULL) {
+        perror(argv[1]);
+        exit(1);
+    }
+
+    fpd = fopen(argv[2], "w");
+    if (fpd == NULL) {
+        perror(argv[2]);
+        fclose(fps);
+        exit(1);
+    }
+
+    while(fgets(buf, 254, fps) != NULL){
+        fputs(buf, fpd);
+    }
+
+    fclose(fpd);
+    fclose(fps);
+
+    end = clock();
+
+    printf("%.5f\n", (double)(end-start)/CLOCKS_PER_SEC);
+
+    return 0;
+}
+----------------------------------------------------------------------
+
+fwrite.c
+----------------------------------------------------------------------
+#include <stdio.h>
+#include <time.h>
+#include <string.h>
+
+int main(int argc, char *argv[])
+{
+    int c;
+    FILE *fps, *fpd;
+    clock_t start,end;
+
+    size_t buf_size = atoi(argv[3]);
+    char *buf = malloc(buf_size);
+
+    start = clock();
+
+    fps = fopen(argv[1], "r");
+    if (fps == NULL) {
+        perror(argv[1]);
+        exit(1);
+    }
+
+    fpd = fopen(argv[2], "w");
+    if (fpd == NULL) {
+        perror(argv[2]);
+        fclose(fps);
+        exit(1);
+    }
+
+    int size;
+    while((size = fread(buf, sizeof(char), buf_size, fps)) != 0){
+          fwrite(buf, sizeof(char), size, fpd);
+    }
+
+    fclose(fpd);
+    fclose(fps);
+
+    end = clock();
+
+    printf("%.5f\n", (double)(end-start)/CLOCKS_PER_SEC);
+
+    return 0;
+}
+----------------------------------------------------------------------
+
+write.c
+----------------------------------------------------------------------
+#include <stdio.h>
+#include <time.h>
+#include <string.h>
+#include <fcntl.h>
+#include <unistd.h>
+
+int main(int argc, char *argv[])
+{
+    clock_t start,end;
+
+    size_t buf_size = atoi(argv[3]);
+    char *buf = malloc(buf_size);
+
+    int fps, fpd;
+    int count;
+
+    fps = open(argv[1], O_RDONLY);
+    if (fps < 0) {
+        perror("open: src");
+        exit(1);
+    }
+
+    fpd = open(argv[2], O_WRONLY | O_CREAT | O_TRUNC, 0644);
+    if (fpd < 0) {
+        perror("open: dst");
+        close(fps);
+        exit(1);
+    }
+
+    while ((count = read(fps, buf, buf_size)) > 0) {
+        if (write(fpd, buf, count) < 0) {
+            perror("write");
+            close(fpd);
+            close(fps);
+            exit(1);
+        }
+    }
+
+    if (count < 0) {
+        perror("read");
+        close(fpd);
+        close(fps);
+        exit(1);
+    }
+
+    close(fpd);
+    close(fps);
+
+    end = clock();
+
+    printf("%.5f\n", (double)(end-start)/CLOCKS_PER_SEC);
+
+    return 0;
+}
+----------------------------------------------------------------------
+
+以下のコマンドでそれぞれをコンパイルする．
+$ gcc fgetc.c -o fgetc
+$ gcc fgets.c -o fgets
+$ gcc fwrite.c -o fwrite
+$ gcc write.c -o write
+
+以下のように前のプログラムでコピーしたファイルを消した後，
+コンパイルしたバイナリを走らせ，時間を表示する．
+それぞれのプログラムを走らせた後"diff file copyfile"を
+実行し，出力がないことを確認した．
+
+$ rm copyfile && ./fgets file copyfile 
+0.16460
+
+$ rm copyfile && ./fgetc file copyfile     
+0.89457
+
+$ rm copyfile && ./write file copyfile 1024
+0.29678
+
+$ rm copyfile && ./fwrite file copyfile 5096
+0.17137
+
+256B,256kB,5.12MB,64MBの4種類の値でそれぞれ10回計測したものを平均した．
+以下にその結果を示す．
+
+fgets: 0.15228
+fgetc: 0.754451
+fwrite 256B: 0.12811
+fwrite 256kB: 0.076919
+fwrite 5.12MB: 0.0842
+fwrite 64MB: 0.103097
+write 256B: 1.046417
+write 256kB: 0.078315
+write 5.12MB: 0.086438
+write 64MB: 0.102238
+
+bufferサイズが大きくなれば時間が短くなる傾向があるが，
+bufferサイズがある程度よりも大きくなると，関数呼び出しのオーバヘット
+よりもデータコピーのコストの方が大きくなり時間がほとんど変わらなくなったと
+考えられる．
+
+
+課題303
+
+mmapシステムコールを用いて，コマンドライン引数で指定された行数だけ
+表示するプログラムを作成した．
+
+tail.c
+----------------------------------------------------------------------
+#include <stdio.h>
+#include <time.h>
+#include <string.h>
+#include <unistd.h>
+#include <fcntl.h>
+#include <sys/mman.h>
+
+int main(int argc, char *argv[])
+{
+    int line = atoi(argv[2]);
+    int file = open(argv[1], O_RDONLY);
+    struct stat s;
+    fstat(file, &s);
+    int size = s.st_size;
+
+    char *map = mmap(0, size, PROT_READ, MAP_PRIVATE, file, 0);
+
+    // jump to last pointer
+    char *pointer = map + size;
+
+    if(size <= 0){
+        return 0;
+    }
+
+    // 最後が改行コードで終わっていない場合は1マイナス．
+    if(pointer[-1] != '\n'){
+        --line;
+    }
+
+    // lineの数だけ取れたか
+    int flag = 0;
+    while(line >= 0){
+        --pointer;
+
+        if(pointer == map){
+            flag = 1;
+            break;
+        }
+
+        if(*pointer == '\n'){
+            --line;
+        }
+    }
+
+    if(flag != 1){
+        // 最後の改行から1つ前に戻る
+        pointer++;
+    }
+
+    while(pointer != (map+size)){
+        putc(*pointer, stdout);
+        pointer++;
+    }
+
+    munmap(map, size);
+    close(file);
+
+    return 0;
+}
+----------------------------------------------------------------------
+
+テスト用に1-30の番号を改行とともに入力したtail_testファイルを用意した．
+tail.cをコンパイルし，実行した．
+
+$ gcc tail.c -o tail
+$ ./tail tail_test 5
+26
+27
+28
+29
+30
+
+と出力され，正しく動作していることがわかる．

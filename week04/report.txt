@@ -1,0 +1,139 @@
+----------------------------------------------------------------------
+学籍番号: 202013586
+名前: 木下 嵩裕
+課題番号：4
+練習問題番号：407
+題名：forkシステムコールとパイプ
+
+環境:
+ArchLinux 2020.05.05 10:00(UTC+0800) 最新
+
+$ gcc --version
+gcc (GCC) 10.1.0
+Copyright (C) 2020 Free Software Foundation, Inc.
+This is free software; see the source for copying conditions.  There is NO
+warranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+
+$ gdb --version
+GNU gdb (GDB) 9.1
+Copyright (C) 2020 Free Software Foundation, Inc.
+License GPLv3+: GNU GPL version 3 or later <http://gnu.org/licenses/gpl.html>
+This is free software: you are free to change and redistribute it.
+There is NO WARRANTY, to the extent permitted by law.
+
+課題407(26行目〜)
+
+課題407
+
+forkで子プロセスを作り，子プロセスと親プロセスが交互に実行を繰り返し0-9,a-zを出力する
+プログラムを407.c作成した．
+
+407.c
+----------------------------------------------------------------------
+#include <stdio.h>
+#include <stdlib.h>
+#include <unistd.h>
+#include <fcntl.h>
+
+int p2c_fdc[2];
+int c2p_fdc[2];
+int flag = 1;
+
+void do_parent(int max){
+    close(c2p_fdc[1]);
+    close(p2c_fdc[0]);
+
+    for(int i = 1; i < max; i += 2){
+        if(read(c2p_fdc[0], &flag, 1) < 0){
+            perror("read");
+        }
+
+        printf("%c", (i/2) % 26 + 'a');
+        fflush(stdout);
+
+        if(write(p2c_fdc[1], &flag, 1) < 0){
+            perror("write");
+        }
+    }
+
+    close(c2p_fdc[0]);
+    close(p2c_fdc[1]);
+}
+
+void do_child(int max){
+    close(p2c_fdc[1]);
+    close(c2p_fdc[0]);
+
+    printf("0");
+    fflush(stdout);
+    if(write(c2p_fdc[1], &flag, 1) < 0) {
+        perror("write");
+    }
+
+    if(max == 1) {
+        exit(2);
+    }
+
+    for(int i = 2; i < max; i += 2){
+        if(read(p2c_fdc[0], &flag, 1) < 0){
+            perror("read");
+        }
+
+        printf("%d", (i/2) % 10);
+        fflush(stdout);
+
+        if(write(c2p_fdc[1], &flag, 1) < 0){
+            perror("write");
+        }
+    }
+
+    close(p2c_fdc[0]);
+    close(c2p_fdc[1]);
+}
+
+int main(int argc, char* argv[]) {
+    int max, pid, status;
+
+    if(argc < 2) {
+        printf("too few argments\n");
+        exit(1);
+    }
+
+    max = atoi(argv[1]);
+//    max = 60;
+
+    if(pipe(p2c_fdc) < 0) {
+        perror("pipe");
+    }
+
+    if(pipe(c2p_fdc) < 0) {
+        perror("pipe");
+    }
+
+    if ((pid = fork()) < 0) {
+        perror("fork");
+    }
+
+    if (pid == 0) {
+        do_child(max);
+    } else {
+        do_parent(max);
+
+        waitpid(pid, &status);
+        printf("\n");
+    }
+
+    return 0;
+}
+
+----------------------------------------------------------------------
+
+コンパイルし，奇数と偶数の場合について実行する．
+
+$ gcc 407.c -o 407
+$ ./407 90     
+0a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6q7r8s9t0u1v2w3x4y5z6a7b8c9d0e1f2g3h4i5j6k7l8m9n0o1p2q3r4s
+$ ./407 89
+0a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6q7r8s9t0u1v2w3x4y5z6a7b8c9d0e1f2g3h4i5j6k7l8m9n0o1p2q3r4
+
+上のように正しく90文字と80文字が出力されている.

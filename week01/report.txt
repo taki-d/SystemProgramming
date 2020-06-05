@@ -1,0 +1,502 @@
+----------------------------------------------------------------------
+学籍番号: 202013586
+名前: 木下 嵩裕
+課題番号：1
+練習問題番号：102 ,105
+題名：gdbによる実行時エラーのデバックとソート 再提出
+
+環境:
+ArchLinux 2020.05.05 10:00(UTC+0800) 最新
+
+$ gcc --version
+gcc (GCC) 10.1.0
+Copyright (C) 2020 Free Software Foundation, Inc.
+This is free software; see the source for copying conditions.  There is NO
+warranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+
+$ gdb --version
+GNU gdb (GDB) 9.1
+Copyright (C) 2020 Free Software Foundation, Inc.
+License GPLv3+: GNU GPL version 3 or later <http://gnu.org/licenses/gpl.html>
+This is free software: you are free to change and redistribute it.
+There is NO WARRANTY, to the extent permitted by law.
+
+課題102(26行目〜),課題105(201行目〜)
+
+課題102
+
+以下のような実行時エラーが発生するmain.cを作成した．
+
+
+----------------------------------------------------------------------
+#include <stdio.h>
+#include <stdlib.h>
+
+int main()
+{
+    int a[8];
+
+    for (int i = 0; i < sizeof(a); ++i) {
+        a[i] = i;
+    }
+
+    for (int i = 0; i < sizeof(a); ++i) {
+        printf("%d element is %d\n",i,a[i]);
+    }
+
+    return 0;
+}
+----------------------------------------------------------------------
+
+
+$ gcc -g main.c
+でコンパイルを行う．
+$ ./a.out
+0 element is 0
+1 element is 1
+2 element is 2
+3 element is 3
+4 element is 4
+5 element is 5
+6 element is 6
+7 element is 7
+8 element is 8
+9 element is 9
+10 element is 10
+11 element is 11
+12 element is 12
+13 element is 13
+14 element is 14
+15 element is 15
+16 element is 16
+17 element is 17
+18 element is 18
+19 element is 19
+20 element is 20
+21 element is 21
+22 element is 22
+23 element is 23
+24 element is 24
+25 element is 25
+26 element is 26
+27 element is 27
+28 element is 28
+29 element is 29
+30 element is 30
+31 element is 31
+*** stack smashing detected ***: terminated
+zsh: abort (core dumped)  ./a.out
+
+
+実行するとstack smashing detectedとなる．Stackが破壊されて異常終了している．
+gdbで異常終了箇所について調査する．
+
+
+$ gdb a.out    
+GNU gdb (GDB) 9.1
+Copyright (C) 2020 Free Software Foundation, Inc.
+License GPLv3+: GNU GPL version 3 or later <http://gnu.org/licenses/gpl.html>
+This is free software: you are free to change and redistribute it.
+There is NO WARRANTY, to the extent permitted by law.
+Type "show copying" and "show warranty" for details.
+This GDB was configured as "x86_64-pc-linux-gnu".
+Type "show configuration" for configuration details.
+For bug reporting instructions, please see:
+<http://www.gnu.org/software/gdb/bugs/>.
+Find the GDB manual and other documentation resources online at:
+    <http://www.gnu.org/software/gdb/documentation/>.
+
+For help, type "help".
+Type "apropos word" to search for commands related to "word"...
+Reading symbols from a.out...
+(gdb) run
+Starting program: /home/taki/workspace/tsukuba/SystemProramming/a.out 
+0 element is 0
+1 element is 1
+2 element is 2
+3 element is 3
+4 element is 4
+5 element is 5
+6 element is 6
+7 element is 7
+8 element is 8
+9 element is 9
+10 element is 10
+11 element is 11
+12 element is 12
+13 element is 13
+14 element is 14
+15 element is 15
+16 element is 16
+17 element is 17
+18 element is 18
+19 element is 19
+20 element is 20
+21 element is 21
+22 element is 22
+23 element is 23
+24 element is 24
+25 element is 25
+26 element is 26
+27 element is 27
+28 element is 28
+29 element is 29
+30 element is 30
+31 element is 31
+*** stack smashing detected ***: terminated
+
+Program received signal SIGABRT, Aborted.
+0x00007ffff7e1dce5 in raise () from /usr/lib/libc.so.6
+(gdb) backtrace
+#0  0x00007ffff7e1dce5 in raise () from /usr/lib/libc.so.6
+#1  0x00007ffff7e07857 in abort () from /usr/lib/libc.so.6
+#2  0x00007ffff7e612b0 in __libc_message () from /usr/lib/libc.so.65555555551ce
+#3  0x00007ffff7ef106a in __fortify_fail () from /usr/lib/libc.so.6
+#4  0x00007ffff7ef1034 in __stack_chk_fail () from /usr/lib/libc.so.6
+#5  0x00005555555551ce in main () at main.c:17
+(gdb) 
+
+
+main関数の終了時に走るカナリアを利用したスタック破壊検知が働いていることがわかる．
+スタックが破壊されているということは，プログラム中で意図しない領域でのメモリへの書き込みが考えられるので，
+プログラムを見返してみる．
+for文中でsizeof(a)をしているが返り値はbyte数なのでsizeof(int)で除算しなければならないところしていないため，
+確保していたint 8個分のエリアの外に書き込みを行ってしまっている．
+sizeof(a)/sizeof(int)にプログラムを修正する．
+
+----------------------------------------------------------------------
+#include <stdio.h>
+#include <stdlib.h>
+
+int main()
+{
+    int a[8];
+
+    for (int i = 0; i < sizeof(a)/sizeof(int); ++i) {
+        a[i] = i;
+    }
+
+    for (int i = 0; i < sizeof(a)/sizeof(int); ++i) {
+        printf("%d element is %d\n",i,a[i]);
+    }
+
+    return 0;
+}
+----------------------------------------------------------------------
+
+上のプログラムをコンパイルして実行した．
+
+$ ./a.out     
+0 element is 0
+1 element is 1
+2 element is 2
+3 element is 3
+4 element is 4
+5 element is 5
+6 element is 6
+7 element is 7
+
+正しく動作していることがわかる．
+
+課題105
+
+解説中にあるバブルソートを乱数による6の要素をソートするように実装したbubblesort.cを作成した．
+
+
+bubblesort.c
+----------------------------------------------------------------------
+#include <stdio.h>
+
+#define DATA_COUNT 6
+int data[DATA_COUNT];
+
+void print_data(int a[], int count)
+{
+    int i;
+
+    for (i = 0; i < count; i++) {
+        printf("%2d ", a[i]);
+    }
+    printf("\n");
+}
+
+void swap_array(int a[], int i, int j)
+{
+    int tmp;
+
+    tmp = a[i];
+    a[i] = a[j];
+    a[j] = tmp;
+}
+
+void sort(int data[], int count){
+    int i, j;
+    int n = count - 1;
+
+    for (i = 0; i < n; i++) {
+        for (j = 0; j < n - i; j++) {
+
+            printf("\t[%d]=%d > [%d]=%d",
+                   j, data[j], j + 1, data[j + 1]);
+
+            if (data[j] > data[j + 1]) {
+                printf(" ... swap!!");
+                swap_array(data, j, j + 1);
+            }
+            printf("\n");
+        }
+    }
+}
+
+int main(void)
+{
+    srand(1);
+    for(int i = 0; i < DATA_COUNT; ++i){
+        data[i] = rand();
+    }
+
+    sort(data, DATA_COUNT);
+    print_data(data, DATA_COUNT);
+    return 0;
+}
+----------------------------------------------------------------------
+
+以下のように，コンパイルし実行する．
+出力から正しくソートされていることがわかる．
+
+$ gcc bubblesort.c -o bubblesort
+$ ./bubblesort
+	[0]=1804289383 > [1]=846930886 ... swap!!
+	[1]=1804289383 > [2]=1681692777 ... swap!!
+	[2]=1804289383 > [3]=1714636915 ... swap!!
+	[3]=1804289383 > [4]=1957747793
+	[4]=1957747793 > [5]=424238335 ... swap!!
+	[0]=846930886 > [1]=1681692777
+	[1]=1681692777 > [2]=1714636915
+	[2]=1714636915 > [3]=1804289383
+	[3]=1804289383 > [4]=424238335 ... swap!!
+	[0]=846930886 > [1]=1681692777
+	[1]=1681692777 > [2]=1714636915
+	[2]=1714636915 > [3]=424238335 ... swap!!
+	[0]=846930886 > [1]=1681692777
+	[1]=1681692777 > [2]=424238335 ... swap!!
+	[0]=846930886 > [1]=424238335 ... swap!!
+424238335 846930886 1681692777 1714636915 1804289383 1957747793
+
+バブルソート同様に乱数6つをソートしその過程がわかるようにしたquicksort.cを示す．
+
+quicksort.c
+----------------------------------------------------------------------
+#include <stdio.h>
+
+#define DATA_COUNT 6
+int data[DATA_COUNT];
+
+void print_data(int a[], int count)
+{
+    int i;
+
+    for (i = 0; i < count; i++) {
+        printf("%2d ", a[i]);
+    }
+    printf("\n");
+}
+
+void swap_array(int a[], int i, int j)
+{
+    int tmp;
+
+    tmp = a[i];
+    a[i] = a[j];
+    a[j] = tmp;
+}
+
+void sort(int data[], int left, int right)
+{
+    int l = left,r = right;
+    int pivot = data[(left+right)/2];
+
+    while(1){
+        while(data[l] < pivot) printf("\t[%d]=%d < [pivot]=%d \n", l,data[l], pivot),++l;
+        while(data[r] > pivot) printf("\t[%d]=%d > [pivot]=%d \n", r,data[r], pivot),--r;
+
+        if(l > r) break;
+
+        // swap if smaller than pivot
+        printf(" ... swap!!");
+        swap_array(data,l,r);
+        printf("\n");
+        ++l; --r;
+    }
+
+    if(left < r) sort(data,left,r);
+    if(l < right) sort(data,l,right);
+}
+
+
+int main(void)
+{
+    srand(1);
+    for(int i = 0; i < DATA_COUNT; ++i){
+        data[i] = rand();
+    }
+
+    sort(data, 0, DATA_COUNT-1);
+    print_data(data, DATA_COUNT);
+    return 0;
+}
+----------------------------------------------------------------------
+
+コンパイルし，実行する．
+
+$ gcc quicksort.c -o quicksort
+$ ./quicksort
+ ... swap!!
+	[1]=846930886 < [pivot]=1681692777 
+	[4]=1957747793 > [pivot]=1681692777 
+	[3]=1714636915 > [pivot]=1681692777 
+ ... swap!!
+	[1]=846930886 > [pivot]=424238335 
+ ... swap!!
+	[3]=1714636915 < [pivot]=1957747793 
+ ... swap!!
+	[4]=1804289383 > [pivot]=1714636915 
+ ... swap!!
+424238335 846930886 1681692777 1714636915 1804289383 1957747793
+
+bubblesortのときと同じようにソートできていることがわかる．
+
+次にソース中のDATACOUNTを10000に書き換え，10000個の要素でソートを実行し，
+そのソート中での比較回数を出力する．またtimeコマンドで実行時間を計測する．
+
+以下に測定に使用したquicksort.c bubblesort.cを示す．
+
+bubblesort.c
+----------------------------------------------------------------------
+#include <stdio.h>
+
+#define DATA_COUNT 10000
+int data[DATA_COUNT];
+int loop_count = 0;
+
+void print_data(int a[], int count)
+{
+    int i;
+
+    for (i = 0; i < count; i++) {
+        printf("%2d ", a[i]);
+    }
+    printf("\n");
+}
+
+void swap_array(int a[], int i, int j)
+{
+    int tmp;
+
+    tmp = a[i];
+    a[i] = a[j];
+    a[j] = tmp;
+}
+
+void sort(int data[], int count){
+    int i, j;
+    int n = count - 1;
+
+    for (i = 0; i < n; i++) {
+        for (j = 0; j < n - i; j++) {
+            ++loop_count;
+            if (data[j] > data[j + 1]) {
+                swap_array(data, j, j + 1);
+            }
+        }
+    }
+}
+
+int main(void)
+{
+    srand(1);
+    for(int i = 0; i < DATA_COUNT; ++i){
+        data[i] = rand();
+    }
+
+    sort(data, DATA_COUNT);
+    printf("%d\n", loop_count);
+    return 0;
+}
+----------------------------------------------------------------------
+
+quicksort.c
+----------------------------------------------------------------------
+#include <stdio.h>
+
+#define DATA_COUNT 10000
+int data[DATA_COUNT];
+int count = 0;
+
+void print_data(int a[], int count)
+{
+    int i;
+
+    for (i = 0; i < count; i++) {
+        printf("%2d ", a[i]);
+    }
+    printf("\n");
+}
+
+void swap_array(int a[], int i, int j)
+{
+    int tmp;
+
+    tmp = a[i];
+    a[i] = a[j];
+    a[j] = tmp;
+}
+
+void sort(int data[], int left, int right)
+{
+    int l = left,r = right;
+    int pivot = data[(left+right)/2];
+
+    while(1){
+        while(data[l] < pivot) ++count,++l;
+        while(data[r] > pivot) ++count,--r;
+
+        if(l > r) break;
+
+        // swap if smaller than pivot
+        swap_array(data,l,r);
+        ++l; --r;
+    }
+
+    if(left < r) sort(data,left,r);
+    if(l < right) sort(data,l,right);
+}
+
+
+int main(void)
+{
+    srand(1);
+    for(int i = 0; i < DATA_COUNT; ++i){
+        data[i] = rand();
+    }
+
+    sort(data, 0, DATA_COUNT-1);
+    printf("%d\n", count);
+    return 0;
+}
+----------------------------------------------------------------------
+
+$ gcc bubblesort.c -o bubblesort
+$ gcc quicksort.c -o quicksort
+
+$ time ./quicksort           
+99681
+./quicksort  0.01s user 0.00s system 90% cpu 0.010 total
+
+$ 49995000
+./bubblesort  0.38s user 0.00s system 99% cpu 0.385 total
+
+実行時間に関してクイックソートのほうが38倍早いという結果であった．
+また，ループ回数を比較するとバブルソートはクイックソートよりも
+約500倍ループ回数が多くなっており，クイックソートはバブルソートに比べて
+効率的なソートだということがわかる．
