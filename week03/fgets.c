@@ -7,7 +7,11 @@ int main(int argc, char *argv[])
     int c;
     FILE *fps, *fpd;
     clock_t start,end;
-    char buf[256];
+    char *buf;
+
+
+    size_t buf_size = atoi(argv[3]);
+    char *buf = malloc(buf_size);
 
     start = clock();
 
@@ -24,7 +28,7 @@ int main(int argc, char *argv[])
         exit(1);
     }
 
-    while(fgets(buf, 254, fps) != NULL){
+    while(fgets(buf, buf_size, fps) != NULL){
         fputs(buf, fpd);
     }
 
