@@ -3,7 +3,7 @@
 名前: 木下 嵩裕
 課題番号：2
 練習問題番号：205 ,207
-題名：strcpy,strdupの再実装とstrlenの高速化
+題名：strcpy,strdupの再実装とstrlenの高速化 再提出
 
 環境:
 ArchLinux 2020.05.17 10:00(UTC+0800) 最新
@@ -25,26 +25,39 @@ There is NO WARRANTY, to the extent permitted by law.
 
 課題205
 
-my_strcpyの作成と動作の確認用に以下の strcpy.cを作成した．
+my_strlcpyの作成と動作の確認用に以下の strlcpy.cを作成した．
 
-strcpy.c
+strlcpy.c
 ----------------------------------------------------------------------
 #include <stdio.h>
 #include <string.h>
 
-
-char *my_strcpy(char *s1, const char *s2){
+char *my_strlcpy(char *s1, const char *s2, size_t size){
     int i = 0;
     while(s2[i] != '\0'){
         s1[i] = s2[i];
+
+        if(i == (size - 1)){
+            break;
+        }
+
         i++;
     }
-    
-    return s1;
-};
+    s1[i] = '\0';
+}
+
+size_t strlcpy(char * dst, const char * src, size_t maxlen) {
+    const size_t srclen = strlen(src);
+    if (srclen + 1 < maxlen) {
+        memcpy(dst, src, srclen + 1);
+    } else if (maxlen != 0) {
+        memcpy(dst, src, maxlen - 1);
+        dst[maxlen-1] = '\0';
+    }
+    return srclen;
+}
 
 int main(void){
-    //
     char str1[100] = "University of Tsukuba";
     char str2[100] = "College of Information Science";
     char str3[100] = "Tsukuba City";
@@ -53,20 +66,20 @@ int main(void){
     char my_str2[100] = "College of Information Science";
     char my_str3[100] = "Tsukuba City";
 
-    printf("strcpy   : %s\n", str1);
-    printf("mystrcpy : %s\n", str1);
+    printf("strlcpy   : %s\n", str1);
+    printf("mystrlcpy : %s\n", str1);
 
-    strcpy(str1, str2);
-    my_strcpy(my_str1, my_str2);
+    strlcpy(str1, str2, 100);
+    my_strlcpy(my_str1, my_str2, 100);
 
-    printf("strcpy   : %s\n", str1);
-    printf("mystrcpy : %s\n", str1);
+    printf("strlcpy   : %s\n", str1);
+    printf("mystrlcpy : %s\n", my_str1);
 
-    strcpy(str1, str3);
-    my_strcpy(my_str1, my_str3);
+    strlcpy(str1, str3, 100);
+    my_strlcpy(my_str1, my_str3, 100);
 
-    printf("strcpy   : %s\n", str1);
-    printf("mystrcpy : %s\n", str1);
+    printf("strlcpy   : %s\n", str1);
+    printf("mystrlcpy : %s\n", my_str1);
 
     return 0;
 }
@@ -74,17 +87,17 @@ int main(void){
 
 以下のように，gccでstrpy.cをコンパイルして実行する．
 
-$ gcc strcpy.c -o strcpy
-$ ./strcpy
-strcpy   : University of Tsukuba
-mystrcpy : University of Tsukuba
-strcpy   : College of Information Science
-mystrcpy : College of Information Science
-strcpy   : Tsukuba City
-mystrcpy : Tsukuba City
+$ gcc strlcpy.c -o strlcpy
+$ ./strlcpy
+strlcpy   : University of Tsukuba
+mystrlcpy : University of Tsukuba
+strlcpy   : College of Information Science
+mystrlcpy : College of Information Science
+strlcpy   : Tsukuba City
+mystrlcpy : Tsukuba City
 
-strcpyを使った場合とmy_strcpyを使用したとき，出力は同じであり，
-strcpyは正しく実装できていると考えられる．
+strlcpyを使った場合とmy_strlcpyを使用したとき，出力は同じであり，
+strlcpyは正しく実装できていると考えられる．
 
 
 my_strdupの作成と動作の確認用に以下のstrdup.cを作成した．
@@ -94,15 +107,15 @@ strdup.c
 #include <stdio.h>
 #include <string.h>
 
-
 char *my_strdup(const char *s){
-    char *rt_s = malloc(sizeof(s));
+    char *rt_s = malloc(strlen(s)*sizeof(char));
 
     int i = 0;
     while(s[i] != '\0'){
         rt_s[i] = s[i];
         i++;
     }
+    rt_s[i] = '\0';
 
     return rt_s;
 };
