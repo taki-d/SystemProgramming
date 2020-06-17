@@ -1,0 +1,246 @@
+----------------------------------------------------------------------
+学籍番号: 202013586
+名前: 木下 嵩裕
+課題番号：5
+練習問題番号：505, 503
+題名：様々なシグナルとシグナルハンドラ
+
+環境:
+ArchLinux 2020.05.05 10:00(UTC+0800) 最新
+
+$ gcc --version
+gcc (GCC) 10.1.0
+Copyright (C) 2020 Free Software Foundation, Inc.
+This is free software; see the source for copying conditions.  There is NO
+warranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+
+$ gdb --version
+GNU gdb (GDB) 9.1
+Copyright (C) 2020 Free Software Foundation, Inc.
+License GPLv3+: GNU GPL version 3 or later <http://gnu.org/licenses/gpl.html>
+This is free software: you are free to change and redistribute it.
+There is NO WARRANTY, to the extent permitted by law.
+
+課題505(26行目〜),課題503(162行目〜)
+
+課題505
+
+timeoutを備えたmy_getchar()とその動作を確かめる505.cを作成した．
+以下に示す．
+
+505.c
+----------------------------------------------------------------------
+#include <stdio.h>
+#include <stdlib.h>
+#include <unistd.h>
+#include <signal.h>
+#include <string.h>
+#include <time.h>
+#include <sys/time.h>
+
+volatile sig_atomic_t sig = 0;
+
+void signal_handler(int s) {
+    if(s == SIGALRM){
+        sig = -2;
+    }else if(s == SIGINT){
+        sig = -3;
+    }else{
+        printf("something wrom\n");
+    }
+}
+
+int mygetchar(int sec, int usec) {
+    int input;
+
+    struct sigaction sa_sig;
+    struct itimerval itimer;
+
+    memset(&sa_sig, 0, sizeof(sa_sig));
+    sa_sig.sa_handler = signal_handler;
+
+    if(sigaction(SIGINT, &sa_sig, NULL) < 0) {
+        perror("sigaction");
+        exit(1);
+    }
+
+    if (sigaction(SIGALRM, &sa_sig, NULL) < 0) {
+        perror("sigaction");
+        exit(1);
+    }
+
+    itimer.it_value.tv_sec = itimer.it_interval.tv_sec = sec;
+    itimer.it_value.tv_usec = itimer.it_interval.tv_usec = usec;
+
+    if (setitimer(ITIMER_REAL, &itimer, NULL) < 0) {
+        perror("setiitimer");
+        exit(1);
+    }
+
+    input = getchar();
+
+    if(sig != 0) {
+        input = sig;
+    }
+
+    itimer.it_value.tv_sec  = itimer.it_interval.tv_sec  = 0;
+    itimer.it_value.tv_usec = itimer.it_interval.tv_usec = 0;
+
+    if (setitimer(ITIMER_REAL, &itimer, NULL) < 0) {
+        perror("setitimer");
+        exit(1);
+    }
+
+    return input;
+}
+
+int main(int argc, char* argv[])
+{
+    time_t time_;
+
+    if(argc < 3) {
+        printf("too few argments\n");
+        exit(1);
+    }
+
+    int sec = atoi(argv[1]);
+    int usec = atoi(argv[2]);
+//    int sec = 5;
+//    int usec = 10;
+
+    time(&time_);
+    printf("%s", ctime(&time_));
+
+    int rt =  mygetchar(sec, usec);
+
+    time(&time_);
+    printf("%s", ctime(&time_));
+
+    if(rt > 0) {
+        printf("%c\n", rt);
+    } else {
+        printf("%d\n", rt);
+    }
+
+    return 0;
+
+}
+----------------------------------------------------------------------
+
+コンパイルする．
+$ gcc 505.c -o 505
+
+問題で指定のあった各パターンについて実行した結果を以下に列挙する．
+
+timeoutさせた場合
+$ ./505 2 0
+Sun Jun  7 04:11:55 2020
+Sun Jun  7 04:11:57 2020
+-2
+
+Ctrl+Cでsigintを発生させた場合
+$ ./505 2 0
+Sun Jun  7 04:12:00 2020
+^CSun Jun  7 04:12:01 2020
+-3
+
+Ctrl+DでEOFを入力した場合
+$ ./505 2 0
+Sun Jun  7 04:12:07 2020
+Sun Jun  7 04:12:08 2020
+-1
+
+aを入力した場合
+$ ./505 2 0
+Sun Jun  7 04:12:20 2020
+a
+Sun Jun  7 04:12:21 2020
+a
+
+以上より，正しく動作していることがわかる．
+
+課題503
+
+第1引数に0が入力されたときにSIGSEGVを起こし，その原因となった
+アクセスしたメモリのアドレスを表示しプログラムを終了，
+また1が入力されたときに0除算でSIGFPEを起こし．SIGFPEを起こしたという表示をし
+終了するプログラム signal.c を作成した．以下にそのソースコードを示す．
+
+signal.c
+----------------------------------------------------------------------
+#include <stdio.h>
+#include <stdlib.h>
+#include <unistd.h>
+#include <signal.h>
+#include <string.h>
+
+void sigsegv_action(int signum, siginfo_t *info, void *ctx){
+    printf("signal handler called: sigsegv\n");
+    printf("caused by accessing address 0x%x\n", info->si_addr);
+
+    exit(1);
+}
+
+void sigfpe_action(int signum, siginfo_t *info, void *ctx){
+    printf("signal handler called: sigfpe\n");
+    exit(1);
+}
+
+int main(int argc, char *argv[])
+{
+
+    if(argc < 2){
+        printf("too few argments\n");
+        return 0;
+    }
+    int action = atoi(argv[1]);
+
+    struct sigaction sa_sigsegv;
+    struct sigaction sa_sigfpe;
+
+    memset(&sa_sigsegv, 0, sizeof(sa_sigsegv));
+    sa_sigsegv.sa_sigaction = sigsegv_action;
+    sa_sigsegv.sa_flags = SA_RESTART | SA_SIGINFO;
+
+    memset(&sa_sigfpe, 0, sizeof(sa_sigfpe));
+    sa_sigfpe.sa_sigaction = sigfpe_action;
+    sa_sigfpe.sa_flags = SA_RESTART | SA_SIGINFO;
+
+    if (sigaction(SIGSEGV, &sa_sigsegv, NULL) < 0) {
+        perror("sigaction");
+        exit(1);
+    }
+
+    if (sigaction(SIGFPE, &sa_sigfpe, NULL) < 0) {
+        perror("sigaction");
+        exit(1);
+    }
+
+    if(action == 0){
+        const char *s = "hello world";
+        char *sa = s;
+        *sa = 'H';
+    }else{
+        //sigfpe
+        int a = 0, b = 100, c;
+        c = b / a;
+        printf("%d\n", c);
+    }
+
+    return 0;
+}
+----------------------------------------------------------------------
+
+コンパイルし，実行する．
+
+$ gcc signal.c -o signal
+
+$ ./signal 1
+signal handler called: sigfpe
+
+$ ./signal 0
+signal handler called: sigsegv
+caused by accessing address 0xa4f4083
+
+1と0を入力した場合について，それぞれsigfpeとsigsegvを起こし，
+signalhandlerが呼び出されていることがわかる．

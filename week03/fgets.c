@@ -7,8 +7,6 @@ int main(int argc, char *argv[])
     int c;
     FILE *fps, *fpd;
     clock_t start,end;
-    char *buf;
-
 
     size_t buf_size = atoi(argv[3]);
     char *buf = malloc(buf_size);
