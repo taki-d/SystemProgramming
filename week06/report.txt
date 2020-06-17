@@ -1,0 +1,243 @@
+----------------------------------------------------------------------
+学籍番号: 202013586
+名前: 木下 嵩裕
+課題番号：6
+練習問題番号：604
+題名：tcp/ipとHTTPクライアント
+
+環境:
+ArchLinux 2020.05.05 10:00(UTC+0800) 最新
+
+$ gcc --version
+gcc (GCC) 10.1.0
+Copyright (C) 2020 Free Software Foundation, Inc.
+This is free software; see the source for copying conditions.  There is NO
+warranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+
+$ gdb --version
+GNU gdb (GDB) 9.1
+Copyright (C) 2020 Free Software Foundation, Inc.
+License GPLv3+: GNU GPL version 3 or later <http://gnu.org/licenses/gpl.html>
+This is free software: you are free to change and redistribute it.
+There is NO WARRANTY, to the extent permitted by law.
+
+課題604
+
+HTTPサーバにHTML等のテキストファイルを要求し，その内容を画面に表示するプロググラム wcat.c
+を作成し，以下に示す．
+
+wcat.c
+----------------------------------------------------------------------
+#include <stdio.h>
+#include <stdlib.h>	/* exit() */
+#include <string.h>	/* memset(), memcpy() */
+#include <sys/types.h>	/* socket() */
+#include <sys/socket.h>	/* socket() */
+#include <netinet/in.h>	/* struct sockaddr_in */
+#include <netdb.h>	/* getaddrinfo() */
+#include <string.h>	/* strlen() */
+#include <unistd.h>	/* close() */
+
+// for debug message
+//#define DEBUG
+
+extern void send_http_request_fixed( FILE *out, char *server, char *path);
+extern	int get_txt_from_server( char *server, int portno, char *path);
+extern  int echo_send_request( FILE *out, char *message );
+extern  int echo_receive_reply( FILE *in, char buf[], int size );
+extern	int tcp_connect( char *server, int portno );
+extern  int fdopen_sock( int sock, FILE **inp, FILE **outp );
+
+int main( int argc, char *argv[] ){
+    char *server ;
+    int portno ;
+    char *path ;
+    int err;
+    if( argc != 4 )
+    {
+        fprintf( stderr,"Usage: %s host port 'message'\n",argv[0] );
+        exit( -1 );
+    }
+    server  = argv[1] ;
+    portno  = strtol( argv[2],0,10 );
+    path = argv[3];
+
+    err = get_txt_from_server(server, portno, path);
+    return( err );
+}
+
+#define	BUFFERSIZE	1024
+
+void send_http_request_fixed( FILE *out, char *server, char *path ) {
+    fprintf(out, "GET %s HTTP/1.0\r\n", path);
+    fprintf(out, "Host: %s\r\n", server);
+    fprintf(out, "\r\n");
+}
+
+int get_txt_from_server( char *server, int portno, char *path){
+    int sock ;
+    FILE *in, *out ;
+    char rbuf[BUFFERSIZE];
+    int res;
+
+    sock = tcp_connect( server, portno );
+    if( sock<0 )
+        return( 1 );
+    if( fdopen_sock(sock,&in,&out) < 0 )
+    {
+        fprintf(stderr,"fdooen()\n");
+        close( sock );
+        return( 1 );
+    }
+
+    #ifdef DEBUG
+    send_http_request_fixed(stdout, server, path);
+    #endif
+
+    send_http_request_fixed(out, server, path);
+
+    #ifdef DEBUG
+    printf("sent http get request to %s:%d\n", server, portno);
+    #endif
+
+    while(fgets(rbuf, BUFFERSIZE, in) != NULL){
+        fputs(rbuf, stdout);
+    }
+
+    #ifdef DEBUG
+    printf("recieved responce\n");
+    #endif
+
+    fclose( in );
+    fclose( out );
+    return( 0 );
+}
+
+
+#define PORTNO_BUFSIZE 30
+
+int tcp_connect( char *server, int portno ) {
+    struct addrinfo hints, *ai, *p;
+    char portno_str[PORTNO_BUFSIZE];
+    int s, err;
+    snprintf( portno_str,sizeof(portno_str),"%d",portno );
+    memset( &hints, 0, sizeof(hints) );
+    hints.ai_socktype = SOCK_STREAM;
+    if( (err = getaddrinfo( server, portno_str, &hints, &ai )) )
+    {
+        fprintf(stderr,"unknown server %s (%s)\n",server,
+            gai_strerror(err) );
+        goto error0;
+    }
+    for( p=ai ; p ; p=p->ai_next )
+    {
+        if( (s = socket(p->ai_family, p->ai_socktype, p->ai_protocol)) < 0 )
+        {
+            perror("socket");
+            goto error1;
+        }
+        if( connect(s, p->ai_addr, p->ai_addrlen) >= 0 )
+        {
+            break;
+        }
+        else
+        {
+            close( s );
+        }
+    }
+    freeaddrinfo( ai );
+    return( s );
+error1:
+    freeaddrinfo( ai );
+error0:
+    return( -1 );
+}
+
+int fdopen_sock( int sock, FILE **inp, FILE **outp ) {
+    int sock2 ;
+    if( (sock2=dup(sock)) < 0 )
+    {
+        return( -1 );
+    }
+    if( (*inp = fdopen( sock2, "r" )) == NULL )
+    {
+        close( sock2 );
+        return( -1 );
+    }
+    if( (*outp = fdopen( sock, "w" )) == NULL )
+    {
+        fclose( *inp );
+        *inp = 0 ;
+        return( -1 );
+    }
+    setvbuf(*outp, (char *)NULL, _IONBF, 0);
+    return( 0 );
+}
+----------------------------------------------------------------------
+
+コンパイルし，実行する．
+$ gcc wcat.c -o wcat
+$ ./wcat www.coins.tsukuba.ac.jp 80 /~syspro/index.html
+HTTP/1.1 200 OK
+Date: Sun, 14 Jun 2020 04:06:48 GMT
+Server: Apache
+Last-Modified: Tue, 02 Jun 2020 09:32:15 GMT
+ETag: "706-5a7169644ee4b"
+Accept-Ranges: bytes
+Content-Length: 1798
+Connection: close
+Content-Type: text/html
+
+<HTML>
+<HEAD>
+<META HTTP-EQUIV="content-type" CONTENT="text/html;charset=utf-8">
+<TITLE> システムプログラム
+</TITLE>
+<STYLE TYPE="text/css"><!--
+@import url(coins-syspro.css);
+--></STYLE>
+</HEAD>
+
+<BODY>
+
+<H1><A ID="title">システムプログラム</A></H1>
+
+</P><P>
+
+<H2><A ID="2020/" HREF="2019/">■2020年</A></H2>
+<H2><A ID="2019/" HREF="2019/">■2019年</A></H2>
+<H2><A ID="2018/" HREF="2018/">■2018年</A></H2>
+<H2><A ID="2017/" HREF="2017/">■2017年</A></H2>
+<H2><A ID="2016/" HREF="2016/">■2016年</A></H2>
+<H2><A ID="2015/" HREF="2015/">■2015年</A></H2>
+<H2><A ID="2014/" HREF="2014/">■2014年</A></H2>
+<H2><A ID="2013/" HREF="2013/">■2013年</A></H2>
+<H2><A ID="2012/" HREF="2012/">■2012年</A></H2>
+<H2><A ID="2011/" HREF="2011/">■2011年</A></H2>
+<H2><A ID="2010/" HREF="2010/">■2010年</A></H2>
+<H2><A ID="2009/" HREF="2009/">■2009年</A></H2>
+<H2><A ID="2008/" HREF="2008/">■2008年</A></H2>
+<H2><A ID="2007/" HREF="2007/">■2007年</A></H2>
+<H2><A ID="2006/" HREF="2006/">■2006年</A></H2>
+<H2><A ID="2005/" HREF="2005/">■2005年</A></H2>
+
+<H2><A ID="links">■関連ページ</A></H2>
+
+<UL>
+<LI> <A HREF="http://www.tsukuba.ac.jp/">筑波大学</A>
+<LI> <A HREF="http://www.coins.tsukuba.ac.jp/">情報科学類</A>
+<LI> <A HREF="http://www.sie.tsukuba.ac.jp/">システム情報工学研究科</A>
+<LI> <A HREF="http://www.cs.tsukuba.ac.jp/">コンピュータサイエンス専攻</A>
+<LI> <A HREF="http://www.cs.tsukuba.ac.jp/~oyama/">大山のホーム・ページ</A>
+<LI> <A HREF="http://www.cs.tsukuba.ac.jp/~yas/">新城のホーム・ページ</A>
+</UL>
+
+
+<HR>
+Last updated: 2020/06/02 18:31:36
+ <BR>
+<ADDRESS> <A HREF="http://www.cs.tsukuba.ac.jp/~yas/">Yasushi Shinjo</A> / &lt;yas@is.tsukuba.ac.jp&gt; </ADDRESS>
+</BODY>
+</HTML>
+
+以上のように，正しく動作する"wcat"を実装できた．
