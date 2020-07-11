@@ -11,6 +11,11 @@ int main(int argc, char *argv[])
     size_t buf_size = atoi(argv[3]);
     char *buf = malloc(buf_size);
 
+    if(buf == NULL){
+        printf("malloc error\n");
+        return 1;
+    }
+
     start = clock();
 
     fps = fopen(argv[1], "r");
@@ -35,7 +40,7 @@ int main(int argc, char *argv[])
 
     end = clock();
 
-    printf("%.5f", (double)(end-start)/CLOCKS_PER_SEC);
+    printf("%.5f\n", (double)(end-start)/CLOCKS_PER_SEC);
 
     return 0;
 }

@@ -32,7 +32,7 @@ int main(int argc, char *argv[])
 
     end = clock();
 
-    printf("%.5f", (double)(end-start)/CLOCKS_PER_SEC);
+    printf("%.5f\n", (double)(end-start)/CLOCKS_PER_SEC);
 
     return 0;
 }

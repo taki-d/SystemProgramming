@@ -3,7 +3,7 @@
 名前: 木下 嵩裕
 課題番号：2
 練習問題番号：205 ,207
-題名：strcpy,strdupの再実装とstrlenの高速化 再提出
+題名：strcpy,strdupの再実装とstrlenの高速化 再再提出
 
 環境:
 ArchLinux 2020.05.17 10:00(UTC+0800) 最新
@@ -21,7 +21,7 @@ License GPLv3+: GNU GPL version 3 or later <http://gnu.org/licenses/gpl.html>
 This is free software: you are free to change and redistribute it.
 There is NO WARRANTY, to the extent permitted by law.
 
-課題205(26行目〜), 課題207(150行目〜)
+課題205(26行目〜), 課題283(150行目〜)
 
 課題205
 
@@ -32,9 +32,9 @@ strlcpy.c
 #include <stdio.h>
 #include <string.h>
 
-char *my_strlcpy(char *s1, const char *s2, size_t size){
-    int i = 0;
-    while(s2[i] != '\0'){
+size_t my_strlcpy(char *s1, const char *s2, size_t size){
+    size_t i = 0;
+    while(s2[i] != '\0' && i != size ){
         s1[i] = s2[i];
 
         if(i == (size - 1)){
@@ -44,17 +44,35 @@ char *my_strlcpy(char *s1, const char *s2, size_t size){
         i++;
     }
     s1[i] = '\0';
+
+    return strlen(s2);
 }
 
-size_t strlcpy(char * dst, const char * src, size_t maxlen) {
-    const size_t srclen = strlen(src);
-    if (srclen + 1 < maxlen) {
-        memcpy(dst, src, srclen + 1);
-    } else if (maxlen != 0) {
-        memcpy(dst, src, maxlen - 1);
-        dst[maxlen-1] = '\0';
+// pulled from freebsd repo
+// https://github.com/freebsd/freebsd/blob/master/sys/libkern/strlcpy.c
+size_t
+strlcpy(char * __restrict dst, const char * __restrict src, size_t dsize)
+{
+    const char *osrc = src;
+    size_t nleft = dsize;
+
+    /* Copy as many bytes as will fit. */
+    if (nleft != 0) {
+        while (--nleft != 0) {
+            if ((*dst++ = *src++) == '\0')
+                break;
+        }
     }
-    return srclen;
+
+    /* Not enough room in dst, add NUL and traverse rest of src. */
+    if (nleft == 0) {
+        if (dsize != 0)
+            *dst = '\0';		/* NUL-terminate dst */
+        while (*src++)
+            ;
+    }
+
+    return(src - osrc - 1);	/* count does not include NUL */
 }
 
 int main(void){
@@ -69,20 +87,21 @@ int main(void){
     printf("strlcpy   : %s\n", str1);
     printf("mystrlcpy : %s\n", str1);
 
-    strlcpy(str1, str2, 100);
-    my_strlcpy(my_str1, my_str2, 100);
+    printf("strlcpy ret val    : %d\n", strlcpy(str1, str2, 100));
+    printf("my strlcpy ret val : %d\n", my_strlcpy(my_str1, my_str2, 100));
 
     printf("strlcpy   : %s\n", str1);
     printf("mystrlcpy : %s\n", my_str1);
 
-    strlcpy(str1, str3, 100);
-    my_strlcpy(my_str1, my_str3, 100);
+    printf("strlcpy ret val    : %d\n", strlcpy(str1, str3, 10));
+    printf("my strlcpy ret val : %d\n", my_strlcpy(my_str1, my_str3, 10));
 
     printf("strlcpy   : %s\n", str1);
     printf("mystrlcpy : %s\n", my_str1);
 
     return 0;
 }
+
 ----------------------------------------------------------------------
 
 以下のように，gccでstrpy.cをコンパイルして実行する．
@@ -91,14 +110,115 @@ $ gcc strlcpy.c -o strlcpy
 $ ./strlcpy
 strlcpy   : University of Tsukuba
 mystrlcpy : University of Tsukuba
+strlcpy ret val    : 30
+my strlcpy ret val : 30
 strlcpy   : College of Information Science
 mystrlcpy : College of Information Science
-strlcpy   : Tsukuba City
-mystrlcpy : Tsukuba City
+strlcpy ret val    : 12
+my strlcpy ret val : 12
+strlcpy   : Tsukuba C
+mystrlcpy : Tsukuba C
 
 strlcpyを使った場合とmy_strlcpyを使用したとき，出力は同じであり，
 strlcpyは正しく実装できていると考えられる．
 
+またcoins計算機環境にSSHして動作を確認した．
+上のソースコードよりstrlcpyを削除した，strlcpy.cを以下に示す．
+
+strlcpy.c
+----------------------------------------------------------------------
+#include <stdio.h>
+#include <string.h>
+
+size_t my_strlcpy(char *s1, const char *s2, size_t size){
+    size_t i = 0;
+    while(s2[i] != '\0' && i != size ){
+        s1[i] = s2[i];
+
+        if(i == (size - 1)){
+            break;
+        }
+
+        i++;
+    }
+    s1[i] = '\0';
+
+    return strlen(s2);
+}
+
+int main(void){
+    char str1[100] = "University of Tsukuba";
+    char str2[100] = "College of Information Science";
+    char str3[100] = "Tsukuba City";
+
+    char my_str1[100] = "University of Tsukuba";
+    char my_str2[100] = "College of Information Science";
+    char my_str3[100] = "Tsukuba City";
+
+    printf("strlcpy   : %s\n", str1);
+    printf("mystrlcpy : %s\n", str1);
+
+    printf("strlcpy ret val    : %d\n", strlcpy(str1, str2, 100));
+    printf("my strlcpy ret val : %d\n", my_strlcpy(my_str1, my_str2, 100));
+
+    printf("strlcpy   : %s\n", str1);
+    printf("mystrlcpy : %s\n", my_str1);
+
+    printf("strlcpy ret val    : %d\n", strlcpy(str1, str3, 10));
+    printf("my strlcpy ret val : %d\n", my_strlcpy(my_str1, my_str3, 10));
+
+    printf("strlcpy   : %s\n", str1);
+    printf("mystrlcpy : %s\n", my_str1);
+
+    return 0;
+}
+----------------------------------------------------------------------
+
+コンパイルし，実行する．
+
+aloe10:workspace s2013586$ gcc strlcpy.c -o strlcpy
+strlcpy.c:32:41: warning: format specifies type 'int' but the argument has type 'unsigned long'
+      [-Wformat]
+    printf("strlcpy ret val    : %d\n", strlcpy(str1, str2, 100));
+                                 ~~     ^~~~~~~~~~~~~~~~~~~~~~~~
+                                 %lu
+/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/secure/_string.h:108:3: note: expanded
+      from macro 'strlcpy'
+                __builtin___strlcpy_chk (dest, __VA_ARGS__, __darwin_obsz (dest))
+                ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+strlcpy.c:33:41: warning: format specifies type 'int' but the argument has type 'size_t'
+      (aka 'unsigned long') [-Wformat]
+    printf("my strlcpy ret val : %d\n", my_strlcpy(my_str1, my_str2, 100));
+                                 ~~     ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+                                 %zu
+strlcpy.c:38:41: warning: format specifies type 'int' but the argument has type 'unsigned long'
+      [-Wformat]
+    printf("strlcpy ret val    : %d\n", strlcpy(str1, str3, 10));
+                                 ~~     ^~~~~~~~~~~~~~~~~~~~~~~
+                                 %lu
+/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/secure/_string.h:108:3: note: expanded
+      from macro 'strlcpy'
+                __builtin___strlcpy_chk (dest, __VA_ARGS__, __darwin_obsz (dest))
+                ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+strlcpy.c:39:41: warning: format specifies type 'int' but the argument has type 'size_t'
+      (aka 'unsigned long') [-Wformat]
+    printf("my strlcpy ret val : %d\n", my_strlcpy(my_str1, my_str3, 10));
+                                 ~~     ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+                                 %zu
+4 warnings generated.
+aloe10:workspace s2013586$ ./strlcpy 
+strlcpy   : University of Tsukuba
+mystrlcpy : University of Tsukuba
+strlcpy ret val    : 30
+my strlcpy ret val : 30
+strlcpy   : College of Information Science
+mystrlcpy : College of Information Science
+strlcpy ret val    : 12
+my strlcpy ret val : 12
+strlcpy   : Tsukuba C
+mystrlcpy : Tsukuba C
+
+BSD版のlibcで動作していることがわかる．
 
 my_strdupの作成と動作の確認用に以下のstrdup.cを作成した．
 
@@ -108,7 +228,7 @@ strdup.c
 #include <string.h>
 
 char *my_strdup(const char *s){
-    char *rt_s = malloc(strlen(s)*sizeof(char));
+    char *rt_s = malloc(strlen(s)*(sizeof(char)+1));
 
     int i = 0;
     while(s[i] != '\0'){

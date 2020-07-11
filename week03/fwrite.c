@@ -11,6 +11,11 @@ int main(int argc, char *argv[])
     size_t buf_size = atoi(argv[3]);
     char *buf = malloc(buf_size);
 
+    if(buf == NULL){
+        printf("malloc error\n");
+        return 1;
+    }
+
     start = clock();
 
     fps = fopen(argv[1], "r");

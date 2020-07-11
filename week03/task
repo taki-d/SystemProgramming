@@ -1,0 +1,13 @@
+fgetc
+fgets 256
+fgets 256000
+fgets 5120000
+fgets 64000000
+fwrite 256
+fwrite 256000
+fwrite 5120000
+fwrite 64000000
+write 256
+write 256000
+write 5120000
+write 64000000

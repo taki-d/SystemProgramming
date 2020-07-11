@@ -3,7 +3,11 @@
 名前: 木下 嵩裕
 課題番号：3
 練習問題番号：301 ,303
-題名：様々なファイルの読み書きの方法 再提出
+題名：様々なファイルの読み書きの方法 再再提出
+
+// 前回の再提出ではCtrl+Sをする前の編集途中のファイルを提出してしまっていたようです.
+// 申し訳ありません．mallocの返り値の検証のためのプログラム修正と計測用プログラムを作成し，
+// 再計測を行いました．
 
 環境:
 ArchLinux 2020.05.05 10:00(UTC+0800) 最新
@@ -21,7 +25,7 @@ License GPLv3+: GNU GPL version 3 or later <http://gnu.org/licenses/gpl.html>
 This is free software: you are free to change and redistribute it.
 There is NO WARRANTY, to the extent permitted by law.
 
-課題301(26行目〜),課題303(271行目〜)
+課題301(30行目〜),課題303(328行目〜)
 
 課題301
 
@@ -30,7 +34,7 @@ $ cat /dev/urandom | tr -dc 'a-zA-Z0-9' | fold -w 200 | head -n 500000  > file
 
 fgetcとfputc,fgetsとfputs,freadとfwrite,readとwriteを使って第1引数のファイル名のファイル
 を第2引数のファイルへコピーするプログラム，fgetc.c,fgets.c,fread.c,read.cを作成した．
-fread.cとread.cに関しては第三引数でバッファのbyte数を入力するようにした．
+fgets.c,fread.cとread.cに関しては第三引数でバッファのbyte数を入力するようにした．
 以下にそのプログラムを示す．
 
 
@@ -74,9 +78,7 @@ int main(int argc, char *argv[])
 
     return 0;
 }
-
 ----------------------------------------------------------------------
-
 
 fgets.c
 ----------------------------------------------------------------------
@@ -92,6 +94,11 @@ int main(int argc, char *argv[])
 
     size_t buf_size = atoi(argv[3]);
     char *buf = malloc(buf_size);
+
+    if(buf == NULL){
+        printf("malloc error\n");
+        return 1;
+    }
 
     start = clock();
 
@@ -117,7 +124,7 @@ int main(int argc, char *argv[])
 
     end = clock();
 
-    printf("%.5f", (double)(end-start)/CLOCKS_PER_SEC);
+    printf("%.5f\n", (double)(end-start)/CLOCKS_PER_SEC);
 
     return 0;
 }
@@ -137,6 +144,11 @@ int main(int argc, char *argv[])
 
     size_t buf_size = atoi(argv[3]);
     char *buf = malloc(buf_size);
+
+    if(buf == NULL){
+        printf("malloc error\n");
+        return 1;
+    }
 
     start = clock();
 
@@ -184,8 +196,15 @@ int main(int argc, char *argv[])
     size_t buf_size = atoi(argv[3]);
     char *buf = malloc(buf_size);
 
+    if(buf == NULL){
+        printf("malloc error\n");
+        return 1;
+    }
+
     int fps, fpd;
     int count;
+
+    start = clock();
 
     fps = open(argv[1], O_RDONLY);
     if (fps < 0) {
@@ -238,40 +257,72 @@ $ gcc write.c -o write
 それぞれのプログラムを走らせた後"diff file copyfile"を
 実行し，出力がないことを確認した．
 
-$ rm copyfile && ./fgets file copyfile 
-0.16460
+$ rm copyfile && ./fgetc file copyfile    
+0.30731
 
-$ rm copyfile && ./fgetc file copyfile     
-0.89457
+$ rm copyfile && ./fgets file copyfile 256
+0.05482
 
-$ rm copyfile && ./write file copyfile 1024
-0.29678
+$ rm copyfile && ./write file copyfile 256
+0.51468
 
-$ rm copyfile && ./fwrite file copyfile 5096
-0.17137
+$ rm copyfile && ./fwrite file copyfile 256
+0.06785
 
-256B,256kB,5.12MB,64MBの4種類の値でそれぞれ10回計測したものを平均した．
+以下のシェルスクリプトを用いて，256B,256kB,5.12MB,64MBの4種類の値でそれぞれ50回計測したものを平均した．
+
+measuretime.sh
+----------------------------------------------------------------------
+#!/bin/sh
+
+gcc fgetc.c -o fgetc > /dev/null 2>&1
+gcc fgets.c -o fgets > /dev/null 2>&1
+gcc fwrite.c -o fwrite > /dev/null 2>&1
+gcc write.c -o write > /dev/null 2>&1
+
+echo -n "fgetc : "
+for v in `seq 10`; do rm copyfile && ./fgetc file copyfile; done | awk '{sum+= $1} END { print sum/NR}'
+
+echo "fgets 256
+fgets 256000
+fgets 5120000
+fgets 64000000
+fwrite 256
+fwrite 256000
+fwrite 5120000
+fwrite 64000000
+write 256
+write 256000
+write 5120000
+write 64000000" | while read cmd val
+do
+echo -n "${cmd} ${val} byte : "
+for v in `seq 50`; do rm copyfile && ./${cmd} file copyfile ${val}; done | awk '{sum+= $1} END { print sum/NR}'
+done
+----------------------------------------------------------------------
+
 以下にその結果を示す．
 
-
-fgetc: 0.754451
-fgets 256B: 0.14271
-fgets 256kB: 0.13708
-fgets 5.12MB: 0.13701
-fgets 64MB: 0.13701
-fwrite 256B: 0.12811
-fwrite 256kB: 0.076919
-fwrite 5.12MB: 0.0842
-fwrite 64MB: 0.103097
-write 256B: 1.046417
-write 256kB: 0.078315
-write 5.12MB: 0.086438
-write 64MB: 0.102238
+$ ./measuretime.sh
+fgetc : 0.30397
+fgets 256 byte : 0.0580564
+fgets 256000 byte : 0.057811
+fgets 5120000 byte : 0.0526222
+fgets 64000000 byte : 0.0553066
+fwrite 256 byte : 0.0546346
+fwrite 256000 byte : 0.0308212
+fwrite 5120000 byte : 0.0351204
+fwrite 64000000 byte : 0.0427978
+write 256 byte : 0.507321
+write 256000 byte : 0.0289406
+write 5120000 byte : 0.0312552
+write 64000000 byte : 0.0421176
 
 bufferサイズが大きくなれば時間が短くなる傾向があるが，
 bufferサイズがある程度よりも大きくなると，関数呼び出しのオーバヘット
 よりもデータコピーのコストの方が大きくなり時間がほとんど変わらなくなったと
 考えられる．
+
 
 
 課題303
